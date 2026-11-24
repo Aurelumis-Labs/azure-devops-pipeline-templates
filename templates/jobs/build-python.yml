@@ -1,0 +1,42 @@
+# Builds a Python app once and publishes a versioned zip artifact.
+parameters:
+  - name: jobName
+    type: string
+    default: build
+  - name: workingDirectory
+    type: string
+  - name: pythonVersion
+    type: string
+    default: '3.11'
+  - name: artifactName
+    type: string
+    default: drop
+
+jobs:
+  - job: ${{ parameters.jobName }}
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: ${{ parameters.pythonVersion }}
+      - script: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt --target .python_packages/lib/site-packages
+        workingDirectory: ${{ parameters.workingDirectory }}
+        displayName: Install dependencies
+      - script: |
+          pip install pytest
+          python -m pytest -q || test $? -eq 5
+        workingDirectory: ${{ parameters.workingDirectory }}
+        displayName: Run tests (pass if none collected)
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: ${{ parameters.workingDirectory }}
+          includeRootFolder: false
+          archiveType: zip
+          archiveFile: $(Build.ArtifactStagingDirectory)/app-$(Build.BuildNumber).zip
+        displayName: Package
+      - publish: $(Build.ArtifactStagingDirectory)
+        artifact: ${{ parameters.artifactName }}
+        displayName: Publish artifact

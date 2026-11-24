@@ -1,0 +1,48 @@
+# Deploys a feature branch to its own App Service slot for pre-merge testing.
+# Branch feature-s1 .. feature-s7 maps to slot s1 .. s7 (see docs/design.md).
+trigger: none
+
+resources:
+  pipelines:
+    - pipeline: ci
+      source: contoso-api-ci
+      trigger:
+        branches:
+          include:
+            - feature-s*
+
+variables:
+  - template: ../../templates/variables/common.yml
+  - template: ../../templates/variables/dev.yml
+
+stages:
+  - stage: FeatureSlot
+    jobs:
+      - job: resolve
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: none
+          - bash: |
+              name="${SOURCE_BRANCH#refs/heads/}"
+              if [[ "$name" =~ ^feature-(s[1-7])$ ]]; then
+                echo "Branch $name -> slot ${BASH_REMATCH[1]}"
+                echo "##vso[task.setvariable variable=slot;isOutput=true]${BASH_REMATCH[1]}"
+              else
+                echo "##vso[task.logissue type=error]Branch '$name' does not map to a slot"
+                exit 1
+              fi
+            name: pick
+            displayName: Map branch to slot
+            env:
+              SOURCE_BRANCH: $(resources.pipeline.ci.sourceBranch)
+
+      - template: ../../templates/jobs/deploy-appservice-zip.yml
+        parameters:
+          jobName: deploy_slot
+          dependsOn: [resolve]
+          environment: contoso-feature
+          azureSubscription: sc-contoso-dev
+          appName: app-contoso-api-dev
+          useSlot: true
+          slotName: $[ dependencies.resolve.outputs['pick.slot'] ]
