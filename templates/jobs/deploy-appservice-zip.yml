@@ -1,0 +1,65 @@
+# Deploys a build artifact (from a pipeline resource) to an App Service or a slot.
+# The same artifact is promoted unchanged; only parameters differ per environment.
+parameters:
+  - name: jobName
+    type: string
+  - name: environment            # Azure DevOps environment (holds approvals and checks)
+    type: string
+  - name: azureSubscription
+    type: string
+  - name: appName
+    type: string
+  - name: useSlot                # true = deploy to a deployment slot instead of production
+    type: boolean
+    default: false
+  - name: slotName               # slot name, or a runtime expression such as $[ dependencies.x.outputs['y.slot'] ]
+    type: string
+    default: ''
+  - name: resourceAlias          # alias of the 'pipelines' resource that produced the artifact
+    type: string
+    default: ci
+  - name: artifactName
+    type: string
+    default: drop
+  - name: pool
+    type: object
+    default:
+      vmImage: ubuntu-latest
+  - name: dependsOn
+    type: object
+    default: []
+  - name: healthPath
+    type: string
+    default: /healthz
+
+jobs:
+  - deployment: ${{ parameters.jobName }}
+    dependsOn: ${{ parameters.dependsOn }}
+    environment: ${{ parameters.environment }}
+    pool: ${{ parameters.pool }}
+    variables:
+      slotName: ${{ parameters.slotName }}   # runtime expressions are evaluated here, then read as $(slotName)
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - download: ${{ parameters.resourceAlias }}
+              artifact: ${{ parameters.artifactName }}
+            - task: AzureWebApp@1
+              displayName: Deploy package (run from package)
+              inputs:
+                azureSubscription: ${{ parameters.azureSubscription }}
+                appType: webAppLinux
+                appName: ${{ parameters.appName }}
+                package: $(Pipeline.Workspace)/${{ parameters.resourceAlias }}/${{ parameters.artifactName }}/*.zip
+                ${{ if eq(parameters.useSlot, true) }}:
+                  deployToSlotOrASE: true
+                  slotName: $(slotName)
+                  resourceGroupName: $(resourceGroup)
+                appSettings: -WEBSITE_RUN_FROM_PACKAGE 1
+            - template: ../steps/verify-health.yml
+              parameters:
+                ${{ if eq(parameters.useSlot, true) }}:
+                  url: https://${{ parameters.appName }}-$(slotName).azurewebsites.net${{ parameters.healthPath }}
+                ${{ else }}:
+                  url: https://${{ parameters.appName }}.azurewebsites.net${{ parameters.healthPath }}

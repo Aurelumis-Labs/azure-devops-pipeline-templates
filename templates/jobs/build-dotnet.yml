@@ -1,0 +1,50 @@
+# Builds a .NET 8 web app once and publishes a versioned zip artifact.
+parameters:
+  - name: jobName
+    type: string
+    default: build
+  - name: projectPath
+    type: string
+  - name: testProjects
+    type: string
+    default: '**/*Tests.csproj'
+  - name: sdkVersion
+    type: string
+    default: '8.x'
+  - name: artifactName
+    type: string
+    default: drop
+
+jobs:
+  - job: ${{ parameters.jobName }}
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+      - task: UseDotNet@2
+        inputs:
+          packageType: sdk
+          version: ${{ parameters.sdkVersion }}
+      - task: DotNetCoreCLI@2
+        displayName: Restore
+        inputs:
+          command: restore
+          projects: ${{ parameters.projectPath }}
+      - task: DotNetCoreCLI@2
+        displayName: Test
+        inputs:
+          command: test
+          projects: ${{ parameters.testProjects }}
+          arguments: --no-restore
+          testRunTitle: unit-tests
+        continueOnError: false
+      - task: DotNetCoreCLI@2
+        displayName: Publish
+        inputs:
+          command: publish
+          publishWebProjects: false
+          projects: ${{ parameters.projectPath }}
+          arguments: -c Release -o $(Build.ArtifactStagingDirectory)/publish
+          zipAfterPublish: true
+      - publish: $(Build.ArtifactStagingDirectory)/publish
+        artifact: ${{ parameters.artifactName }}
+        displayName: Publish artifact

@@ -1,0 +1,27 @@
+# Fails the deployment unless the target answers 200 within the retry budget.
+parameters:
+  - name: url
+    type: string
+  - name: attempts
+    type: number
+    default: 12
+  - name: delaySeconds
+    type: number
+    default: 10
+
+steps:
+  - bash: |
+      set -u
+      for i in $(seq 1 "$ATTEMPTS"); do
+        code=$(curl -s -o /dev/null -w '%{http_code}' "$URL" || true)
+        echo "attempt $i/$ATTEMPTS: HTTP $code"
+        [ "$code" = "200" ] && exit 0
+        sleep "$DELAY"
+      done
+      echo "##vso[task.logissue type=error]Health check failed for $URL"
+      exit 1
+    displayName: Verify health
+    env:
+      URL: ${{ parameters.url }}
+      ATTEMPTS: ${{ parameters.attempts }}
+      DELAY: ${{ parameters.delaySeconds }}

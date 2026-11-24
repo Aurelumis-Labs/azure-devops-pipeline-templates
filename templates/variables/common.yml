@@ -1,0 +1,6 @@
+# Shared by every environment.
+variables:
+  artifactName: drop
+  pythonVersion: '3.11'
+  dotnetSdkVersion: '8.x'
+  healthPath: /healthz

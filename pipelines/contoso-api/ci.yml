@@ -1,0 +1,17 @@
+# Builds once. Every environment later deploys this exact artifact.
+trigger:
+  branches:
+    include:
+      - main
+      - feature-s*
+
+variables:
+  - template: ../../templates/variables/common.yml
+
+stages:
+  - stage: Build
+    jobs:
+      - template: ../../templates/jobs/build-dotnet.yml
+        parameters:
+          projectPath: src/Contoso.Api/Contoso.Api.csproj
+          artifactName: $(artifactName)

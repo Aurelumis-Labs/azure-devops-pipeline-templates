@@ -1,0 +1,42 @@
+# Promotes the artifact built by contoso-api-ci: main -> dev -> prod.
+trigger: none
+
+resources:
+  pipelines:
+    - pipeline: ci
+      source: contoso-api-ci          # name of the CI pipeline in Azure DevOps
+      trigger:
+        branches:
+          include:
+            - main
+
+variables:
+  - template: ../../templates/variables/common.yml
+
+stages:
+  - stage: Dev
+    variables:
+      - template: ../../templates/variables/dev.yml
+    jobs:
+      - template: ../../templates/jobs/deploy-appservice-zip.yml
+        parameters:
+          jobName: deploy_dev
+          environment: contoso-dev
+          azureSubscription: sc-contoso-dev      # service connection names are literals, not variables
+          appName: app-contoso-api-dev
+
+  - stage: Prod
+    dependsOn: Dev
+    variables:
+      - template: ../../templates/variables/prod.yml
+    jobs:
+      - template: ../../templates/jobs/deploy-appservice-zip.yml
+        parameters:
+          jobName: deploy_prod
+          environment: contoso-prod       # configure an approval check on this environment
+          azureSubscription: sc-contoso-prod
+          appName: app-contoso-api-prod
+          pool:
+            name: pool-contoso-selfhosted
+            demands:
+              - TargetEnvironment -equals PROD
